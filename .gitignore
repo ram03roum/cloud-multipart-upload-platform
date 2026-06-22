@@ -1,0 +1,37 @@
+# ======Python=======
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+env/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ======Azure / Infra as Code=======
+.azure/
+local.settings.json
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+*.tfvars
+!*.tfvars.example
+
+# ======Docker=======
+docker-compose.override.yml
+
+# ======Secrets=======
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# ======IDE / OS=======
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
