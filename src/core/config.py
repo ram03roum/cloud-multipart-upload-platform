@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     azure_container_name: str = "uploads"
     max_file_size_mb: int = 5120
     chunk_size_mb: int = 16
+    upload_ttl_hours: int = 24
 
     class Config:
         env_file = ".env"
