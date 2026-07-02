@@ -1,14 +1,27 @@
+import hashlib
 import math
 import uuid
 from datetime import UTC, datetime, timedelta
 
+from fastapi import UploadFile
+
 from src.core.config import settings
+from src.core.exceptions import (
+    ChecksumMismatchError,
+    ChunkTooLargeError,
+    InvalidPartNumberError,
+    UploadAlreadyCompletedError,
+    UploadExpiredError,
+    UploadNotFoundError,
+)
 from src.models.upload import (
+    ChunkUploadResponse,
     UploadInitiateRequest,
     UploadInitiateResponse,
     UploadSession,
     UploadStatus,
 )
+from src.services.azure_storage import generate_block_id, stage_block
 from src.services.upload_store import upload_store
 
 
@@ -38,4 +51,48 @@ def initiate_upload(request: UploadInitiateRequest) -> UploadInitiateResponse:
         status=UploadStatus.INITIATED,
         created_at=now,
         expiration_time=expiration_time,
+    )
+
+
+async def upload_chunk(
+    upload_id: str, part_number: int, chunk: UploadFile, checksum: str
+) -> ChunkUploadResponse:
+    # Validate the upload session
+    session = upload_store.get(upload_id)
+    if not session:
+        raise UploadNotFoundError(upload_id)
+    # Check if the upload session has expired
+    if session.expiration_time < datetime.now(UTC):
+        raise UploadExpiredError(upload_id)
+    # Check if the upload session is already completed
+    if session.status == UploadStatus.COMPLETED:
+        raise UploadAlreadyCompletedError(upload_id)
+    # Validate the part number
+    if part_number < 1 or part_number > session.total_parts:
+        raise InvalidPartNumberError(part_number, session.total_parts)
+    # read the chunk data
+    chunk_data = await chunk.read()
+    # Validate the taille of the checksum
+    max_chunk_size = session.chunk_size
+    if len(chunk_data) > max_chunk_size:
+        raise ChunkTooLargeError(len(chunk_data), max_chunk_size)
+    # Validate the checksum
+    if checksum:
+        computed = hashlib.md5(chunk_data).hexdigest()
+        if computed != checksum:
+            raise ChecksumMismatchError()
+    # Generate a block ID for Azure Blob Storage
+    block_id = generate_block_id(part_number)
+    stage_block(upload_id, block_id, chunk_data)
+    # Update the upload session with the uploaded part
+    session.uploaded_parts[part_number] = block_id
+    session.status = UploadStatus.IN_PROGRESS
+    upload_store.save(session)
+    return ChunkUploadResponse(
+        upload_id=upload_id,
+        part_number=part_number,
+        status=UploadStatus.IN_PROGRESS,
+        uploaded_parts=len(session.uploaded_parts),
+        total_parts=session.total_parts,
+        block_id=block_id,
     )

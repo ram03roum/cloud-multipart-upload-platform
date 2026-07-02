@@ -50,3 +50,14 @@ class UploadSession(BaseModel):
     status: UploadStatus
     created_at: datetime
     expiration_time: datetime
+    uploaded_parts: dict[int, str] = Field(default_factory=dict)
+    # clé = part_number, valeur = block_id correspondant à ce part_number dans Azure Blob Storage
+
+
+class ChunkUploadResponse(BaseModel):
+    upload_id: str
+    part_number: int
+    block_id: str
+    status: str
+    uploaded_parts: int
+    total_parts: int
