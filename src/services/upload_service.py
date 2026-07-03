@@ -10,18 +10,25 @@ from src.core.exceptions import (
     ChecksumMismatchError,
     ChunkTooLargeError,
     InvalidPartNumberError,
+    MissingPartsError,
     UploadAlreadyCompletedError,
     UploadExpiredError,
     UploadNotFoundError,
 )
 from src.models.upload import (
     ChunkUploadResponse,
+    UploadCompleteResponse,
     UploadInitiateRequest,
     UploadInitiateResponse,
     UploadSession,
     UploadStatus,
 )
-from src.services.azure_storage import generate_block_id, stage_block
+from src.services.azure_storage import (
+    commit_block_list,
+    generate_block_id,
+    get_blob_checksum,
+    stage_block,
+)
 from src.services.upload_store import upload_store
 
 
@@ -95,4 +102,52 @@ async def upload_chunk(
         uploaded_parts=len(session.uploaded_parts),
         total_parts=session.total_parts,
         block_id=block_id,
+    )
+
+
+def complete_upload(
+    upload_id: str,
+    expected_checksum: str | None = None,
+) -> UploadCompleteResponse:
+    # Validate the upload session
+    session = upload_store.get(upload_id)
+    if not session:
+        raise UploadNotFoundError(upload_id)
+    # Check if the upload session has expired
+    if session.expiration_time < datetime.now(UTC):
+        raise UploadExpiredError(upload_id)
+    # Check if the upload session is already completed
+    if session.status == UploadStatus.COMPLETED:
+        raise UploadAlreadyCompletedError(upload_id)
+    # Validate that all parts have been uploaded
+    if len(session.uploaded_parts) != session.total_parts:
+        raise MissingPartsError(
+            missing_parts=[
+                i for i in range(1, session.total_parts + 1) if i not in session.uploaded_parts
+            ]
+        )
+    # Commit the block list to Azure Blob Storage
+
+    block_ids = [session.uploaded_parts[i] for i in range(1, session.total_parts + 1)]
+    blob_url = commit_block_list(
+        upload_id=upload_id,
+        block_ids=block_ids,
+        metadata=session.metadata,
+        content_type=session.content_type,
+    )
+    # Validate the final checksum if provided
+    if expected_checksum:
+        final_checksum = get_blob_checksum(upload_id)
+        if final_checksum != expected_checksum:
+            raise ChecksumMismatchError()
+    # Update the upload session status to COMPLETED
+    session.status = UploadStatus.COMPLETED
+    upload_store.save(session)
+    return UploadCompleteResponse(
+        upload_id=upload_id,
+        file_name=session.filename,
+        status=UploadStatus.COMPLETED,
+        total_parts=session.total_parts,
+        blob_url=blob_url,
+        completed_at=datetime.now(UTC),
     )

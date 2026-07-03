@@ -65,3 +65,21 @@ class ChecksumMismatchError(AppError):
             code="CHECKSUM_MISMATCH",
             status_code=422,
         )
+
+
+class MissingPartsError(AppError):
+    def __init__(self, missing_parts: list[int]):
+        super().__init__(
+            message=f"Missing parts: {missing_parts}. Upload all parts before completing.",
+            code="MISSING_PARTS",
+            status_code=400,
+        )
+
+
+class BlobChecksumMismatchError(AppError):
+    def __init__(self) -> None:
+        super().__init__(
+            message="Final blob checksum does not match provided checksum",
+            code="BLOB_CHECKSUM_MISMATCH",
+            status_code=422,
+        )

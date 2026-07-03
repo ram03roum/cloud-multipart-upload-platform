@@ -61,3 +61,12 @@ class ChunkUploadResponse(BaseModel):
     status: str
     uploaded_parts: int
     total_parts: int
+
+
+class UploadCompleteResponse(BaseModel):
+    upload_id: str
+    # file_name: str
+    status: UploadStatus
+    total_parts: int
+    blob_url: str
+    completed_at: datetime

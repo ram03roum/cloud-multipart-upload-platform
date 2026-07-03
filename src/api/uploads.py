@@ -2,10 +2,11 @@ from fastapi import APIRouter, Header, UploadFile, status
 
 from src.models.upload import (
     ChunkUploadResponse,
+    UploadCompleteResponse,
     UploadInitiateRequest,
     UploadInitiateResponse,
 )
-from src.services.upload_service import initiate_upload, upload_chunk
+from src.services.upload_service import complete_upload, initiate_upload, upload_chunk
 
 router = APIRouter(prefix="/api/v1/uploads", tags=["uploads"])
 
@@ -37,3 +38,14 @@ async def upload_chunk_endpoint(
     return await upload_chunk(
         upload_id=upload_id, part_number=part_number, chunk=chunk, checksum=checksum
     )
+
+
+@router.post(
+    "/{upload_id}/complete",
+    response_model=UploadCompleteResponse,
+    status_code=status.HTTP_200_OK,
+)
+def complete_upload_endpoint(
+    upload_id: str, x_blob_checksum: str | None = Header(default=None)
+) -> UploadCompleteResponse:
+    return complete_upload(upload_id=upload_id, expected_checksum=x_blob_checksum)
