@@ -9,6 +9,7 @@ class UploadStatus(str, Enum):
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
     ERROR = "ERROR"
+    DELETED = "DELETED"
 
 
 class UploadInitiateRequest(BaseModel):
@@ -70,3 +71,9 @@ class UploadCompleteResponse(BaseModel):
     total_parts: int
     blob_url: str
     completed_at: datetime
+
+
+class UploadDeleteResponse(BaseModel):
+    upload_id: str
+    status: UploadStatus
+    deleted_at: datetime

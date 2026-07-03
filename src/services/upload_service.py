@@ -12,12 +12,14 @@ from src.core.exceptions import (
     InvalidPartNumberError,
     MissingPartsError,
     UploadAlreadyCompletedError,
+    UploadAlreadyDeletedError,
     UploadExpiredError,
     UploadNotFoundError,
 )
 from src.models.upload import (
     ChunkUploadResponse,
     UploadCompleteResponse,
+    UploadDeleteResponse,
     UploadInitiateRequest,
     UploadInitiateResponse,
     UploadSession,
@@ -150,4 +152,25 @@ def complete_upload(
         total_parts=session.total_parts,
         blob_url=blob_url,
         completed_at=datetime.now(UTC),
+    )
+
+
+def delete_upload(upload_id: str) -> UploadDeleteResponse:
+    # Validate the upload session
+    session = upload_store.get(upload_id)
+    if not session:
+        raise UploadNotFoundError(upload_id)
+    # Check if the upload session is already completed
+    if session.status == UploadStatus.COMPLETED:
+        raise UploadAlreadyCompletedError(upload_id)
+    # Check if the upload session is already deleted
+    if session.status == UploadStatus.DELETED:
+        raise UploadAlreadyDeletedError(upload_id)
+    # Mark the upload session as DELETED
+    session.status = UploadStatus.DELETED
+    upload_store.save(session)
+    return UploadDeleteResponse(
+        upload_id=upload_id,
+        status=UploadStatus.DELETED,
+        deleted_at=datetime.now(UTC),
     )

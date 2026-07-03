@@ -83,3 +83,12 @@ class BlobChecksumMismatchError(AppError):
             code="BLOB_CHECKSUM_MISMATCH",
             status_code=422,
         )
+
+
+class UploadAlreadyDeletedError(AppError):
+    def __init__(self, upload_id: str):
+        super().__init__(
+            message=f"Upload session '{upload_id}' is already aborted",
+            code="UPLOAD_ALREADY_ABORTED",
+            status_code=409,
+        )
