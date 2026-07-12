@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import Enum
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 
 class UploadStatus(str, Enum):
@@ -17,17 +17,31 @@ class UploadInitiateRequest(BaseModel):
         ..., description="Name of the file to be uploaded", min_length=1, max_length=255
     )
     file_size: int = Field(..., description="Size of the file in bytes", gt=0)
-    content_type: str = Field(default="application/octet-stream")
-    chunk_size: int = Field(description="Size of each chunk in bytes")
+    file_path: str = Field(..., description="Local path of the file to upload")
+    destination_file_path: str = Field(
+        ...,
+        description="Format: 'container_name/path/in/container', ex: 'uploads/videos/clip.mp4'",
+    )
 
-    @field_validator("chunk_size")
     @classmethod
-    def validate_chunk_size(cls, value: int) -> int:
-        min_size = 5 * 1024 * 1024  # 5 MB
-        max_size = 100 * 1024 * 1024  # 100 MB
-        if value < min_size or value > max_size:
-            raise ValueError(f"Chunk size must be between {min_size} and {max_size} bytes")
+    def validate_destination_format(cls, value: str) -> str:
+        if "/" not in value:
+            raise ValueError(
+                "destination_file_path doit être au format 'container_name/path', "
+                "ex: 'uploads/videos/clip.mp4'"
+            )
+        container_name, blob_path = value.split("/", 1)
+        if not container_name or not blob_path:
+            raise ValueError("container_name et le chemin du blob ne peuvent pas être vides")
         return value
+
+    @property
+    def container_name(self) -> str:
+        return self.destination_file_path.split("/", 1)[0]
+
+    @property
+    def blob_path(self) -> str:
+        return self.destination_file_path.split("/", 1)[1]
 
 
 class UploadInitiateResponse(BaseModel):
@@ -42,38 +56,33 @@ class UploadInitiateResponse(BaseModel):
 
 class UploadSession(BaseModel):
     upload_id: str
-    filename: str
+    file_name: str
     file_size: int
+    file_path: str = ""
+    destination_file_path: str = ""
     content_type: str
-    chunk_size: int
-    total_parts: int
-    metadata: dict
     status: UploadStatus
+    chunk_size: int = 0
+    total_parts: int = 0
+    expiration_time: datetime | None = None
+    blob_url: str = ""
+    blob_name: str = ""
+    metadata: dict = Field(default_factory=dict)
     created_at: datetime
-    expiration_time: datetime
-    uploaded_parts: dict[int, str] = Field(default_factory=dict)
-    # clé = part_number, valeur = block_id correspondant à ce part_number dans Azure Blob Storage
-
-
-class ChunkUploadResponse(BaseModel):
-    upload_id: str
-    part_number: int
-    block_id: str
-    status: str
-    uploaded_parts: int
-    total_parts: int
+    completed_at: datetime | None = None
 
 
 class UploadCompleteResponse(BaseModel):
     upload_id: str
-    # file_name: str
+    file_name: str
+    file_size: int
     status: UploadStatus
     total_parts: int
     blob_url: str
+    created_at: datetime
     completed_at: datetime
 
 
-class UploadDeleteResponse(BaseModel):
+class UploadStatusResponse(BaseModel):
     upload_id: str
     status: UploadStatus
-    deleted_at: datetime

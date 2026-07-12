@@ -4,15 +4,23 @@ from fastapi.responses import JSONResponse
 
 
 class AppError(Exception):
-    def __init__(self, message: str, status_code: int = 400):
+    def __init__(self, message: str, status_code: int = 400, code: str = "ERROR"):
         self.message = message
         self.status_code = status_code
+        self.code = code
 
 
 async def app_error_handler(request: Request, exc: AppError):
     return JSONResponse(
         status_code=exc.status_code,
-        content={"detail": exc.message},
+        content={"detail": exc.message, "code": exc.code},
+    )
+
+
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error", "code": "INTERNAL_SERVER_ERROR"},
     )
 
 
